@@ -1,0 +1,172 @@
+-- ExportThings - for exporting Things database to the Desktop as Things Backup.ics
+-- ------------------------------------------------------------------------------
+-- settings
+-- ------------------------------------------------------------------------------
+global theList
+-- configures which areas of Things should be included in output
+-- set theList to {"Inbox", "Today", "Next", "Scheduled", "Someday", "Projects", "Logbook"}
+set theList to {"Inbox", "Logbook"}
+-- configures the file where output is stored
+set theFilePath to (path to desktop as Unicode text) & "Things Backup.ics"
+-- ------------------------------------------------------------------------------
+-- script
+-- ------------------------------------------------------------------------------
+
+on WriteIcs()
+	local ics, theListItem, toDo, toDos
+	
+	set ics to "BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.1//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+DTSTART:19810329T020000
+TZNAME:MESZ
+TZOFFSETTO:+0200
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+DTSTART:19961027T030000
+TZNAME:MEZ
+TZOFFSETTO:+0100
+END:STANDARD
+END:VTIMEZONE" & linefeed
+	
+	
+	
+	
+	tell application "Things"
+		repeat with theListItem in theList
+			
+			set toDos to to dos of list theListItem
+			
+			repeat with toDo in toDos
+				
+				set tdUid to the id of toDo
+				set tdName to the name of toDo
+				set tdNotes to the notes of toDo
+				
+				set AppleScript's text item delimiters to {return & linefeed, return, linefeed, character id 8233, character id 8232}
+				set newText to text items of tdNotes
+				set AppleScript's text item delimiters to {"\\n"}
+				set tdNotes2 to newText as text
+				
+				set tdTags to the tag names of toDo
+				set tdStatus to the status of toDo
+				set tdStatus2 to tdStatus
+				set PercCompl to ""
+				
+				if (tdStatus as string = "open") then
+					set tdStatus2 to "NEEDS-ACTION"
+					set PercCompl to "0"
+				else if (tdStatus as string = "completed") then
+					set tdStatus2 to "COMPLETED"
+					set PercCompl to "100"
+				end if
+				
+				set tdDueDate to the due date of toDo
+				
+				if tdDueDate is not missing value then
+					set StrY to year of tdDueDate
+					set StrM to text -2 thru -1 of ("0" & ((month of tdDueDate) * 1))
+					set StrD to text -2 thru -1 of ("0" & tdDueDate's day)
+					set tdDueDate2 to "DTSTAMP;VALUE=DATE-TIME:" & StrY & StrM & StrD & "T000000Z" & linefeed
+				else
+					set tdDueDate2 to ""
+				end if
+				
+				set tdCreationDate to the creation date of toDo
+				
+				if tdCreationDate is not missing value then
+					set StrY to year of tdCreationDate
+					set StrM to text -2 thru -1 of ("0" & ((month of tdCreationDate) * 1))
+					set StrD to text -2 thru -1 of ("0" & tdCreationDate's day)
+					set tdCreationDate2 to "CREATED;VALUE=DATE-TIME:" & StrY & StrM & StrD & "T000000Z" & linefeed
+				else
+					set tdCreationDate2 to ""
+				end if
+				
+				set tdModDate to the modification date of toDo
+				
+				if tdModDate is not missing value then
+					set StrY to year of tdModDate
+					set StrM to text -2 thru -1 of ("0" & ((month of tdModDate) * 1))
+					set StrD to text -2 thru -1 of ("0" & tdModDate's day)
+					set tdModDate2 to "LAST-MODIFIED;VALUE=DATE-TIME:" & StrY & StrM & StrD & "T000000Z" & linefeed
+				else
+					set tdModDate2 to ""
+				end if
+				
+				set tdActiveDate to the activation date of toDo
+				set tdComplDate to the completion date of toDo
+				
+				if tdComplDate is not missing value then
+					set StrY to year of tdComplDate
+					set StrM to text -2 thru -1 of ("0" & ((month of tdComplDate) * 1))
+					set StrD to text -2 thru -1 of ("0" & tdComplDate's day)
+					set tdComplDate2 to "COMPLETED;VALUE=DATE-TIME:" & StrY & StrM & StrD & "T000000Z" & linefeed
+				else
+					set tdComplDate2 to ""
+				end if
+				
+				set tdCancelDate to the cancellation date of toDo
+				set tdProject to the project of toDo
+				set tdArea to the area of toDo
+				--				set tdDelegate to the delegate of toDo
+				
+				
+				set ics to ics & "BEGIN:VTODO" & linefeed
+				set ics to ics & "STATUS:" & tdStatus2 & linefeed
+				set ics to ics & tdCreationDate2
+				set ics to ics & "UID" & tdUid & linefeed
+				set ics to ics & "SUMMARY:" & tdName & linefeed
+				set ics to ics & tdComplDate2
+				set ics to ics & tdDueDate2
+				set ics to ics & "PERCENT-COMPLETE:" & PercCompl & linefeed
+				set ics to ics & tdModDate2
+				set ics to ics & "SEQUENCE:0" & linefeed
+				set ics to ics & "DESCRIPTION:" & tdNotes2 & linefeed
+				set ics to ics & "END:VTODO" & linefeed
+				
+			end repeat
+			
+		end repeat
+		
+	end tell
+	
+	set ics to ics & "END:VCALENDAR"
+	
+	return ics
+	
+end WriteIcs
+
+
+
+
+set scriptOutput to ""
+if (application "Things" is not running) then tell application "Things" to activate
+if application "Things" is running then
+	set scriptOutput to scriptOutput & WriteIcs()
+	set theFile to (open for access file (theFilePath) with write permission)
+	set eof of theFile to 0
+	write scriptOutput to theFile
+	close access theFile
+else
+	try
+		set theFile to (open for access file (theFilePath))
+		set scriptOutput to (read theFile)
+		close access theFile
+	on error
+		tell application "Finder" to delete file theFilePath
+		set scriptOutput to ""
+	end try
+end if
+
+return scriptOutput
+
+
